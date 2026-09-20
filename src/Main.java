@@ -1,11 +1,21 @@
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.StructuredTaskScope;
+
+
+/*
+ * Quantidade de execuções utilizada para
+ * calcular o tempo médio.
+ */
+private static final int REPETICOES = 10;
 
 
 /*
@@ -42,7 +52,8 @@ private static double processar(double[][] matriz) {
 
         for (int j = 0; j < matriz[i].length; j++) {
 
-            resultado += calcular(matriz[i][j]);
+            resultado +=
+                    calcular(matriz[i][j]);
         }
     }
 
@@ -66,7 +77,9 @@ private static double[][] gerarMatriz(
 
     for (int i = 0; i < linhas; i++) {
 
-        for (int j = 0; j < colunas; j++) {
+        for (int j = 0;
+             j < colunas;
+             j++) {
 
             int valorBase =
                     ((i + 1) * 31
@@ -120,6 +133,13 @@ private static double processarFaixa(
  * ============================================================
  *
  * A matriz é dividida em N tarefas.
+ *
+ * Utiliza:
+ *
+ * - ExecutorService
+ * - Threads
+ * - Future
+ * - Semaphore
  *
  * ExecutorService:
  * gerencia as threads responsáveis pelas tarefas.
@@ -194,7 +214,8 @@ private static double processarNaoEstruturado(
 
         for (Future<Double> futuro : futuros) {
 
-            resultado += futuro.get();
+            resultado +=
+                    futuro.get();
         }
 
         return resultado;
@@ -207,8 +228,190 @@ private static double processarNaoEstruturado(
 
 
 /*
+ * ============================================================
+ * V3 - PARALELISMO ESTRUTURADO
+ * ============================================================
+ *
+ * Utiliza StructuredTaskScope.
+ *
+ * Cada parte da matriz é processada por uma
+ * subtarefa criada com fork().
+ *
+ * join() aguarda a conclusão das subtarefas.
+ */
+private static double processarEstruturado(
+        double[][] matriz,
+        int quantidadeTarefas)
+        throws InterruptedException {
+
+    try (var scope =
+                 StructuredTaskScope
+                         .<Double>open()) {
+
+        List<StructuredTaskScope.Subtask<Double>>
+                subtarefas =
+                new ArrayList<>();
+
+        for (int tarefa = 0;
+             tarefa < quantidadeTarefas;
+             tarefa++) {
+
+            int linhaInicial =
+                    tarefa
+                            * matriz.length
+                            / quantidadeTarefas;
+
+            int linhaFinal =
+                    (tarefa + 1)
+                            * matriz.length
+                            / quantidadeTarefas;
+
+            var subtarefa =
+                    scope.fork(() ->
+                            processarFaixa(
+                                    matriz,
+                                    linhaInicial,
+                                    linhaFinal));
+
+            subtarefas.add(
+                    subtarefa);
+        }
+
+        scope.join();
+
+        double resultado = 0.0;
+
+        for (var subtarefa : subtarefas) {
+
+            resultado +=
+                    subtarefa.get();
+        }
+
+        return resultado;
+    }
+}
+
+
+/*
+ * ============================================================
+ * V4 - ESTADO COMPARTILHADO
+ * ============================================================
+ *
+ * Parte da solução estruturada.
+ *
+ * As subtarefas compartilham uma
+ * ConcurrentLinkedQueue.
+ *
+ * Cada uma adiciona seu resultado parcial
+ * à coleção concorrente.
+ */
+private static double processarEstadoCompartilhado(
+        double[][] matriz,
+        int quantidadeTarefas)
+        throws InterruptedException {
+
+    ConcurrentLinkedQueue<Double>
+            resultados =
+            new ConcurrentLinkedQueue<>();
+
+    try (var scope =
+                 StructuredTaskScope
+                         .<Void>open()) {
+
+        for (int tarefa = 0;
+             tarefa < quantidadeTarefas;
+             tarefa++) {
+
+            int linhaInicial =
+                    tarefa
+                            * matriz.length
+                            / quantidadeTarefas;
+
+            int linhaFinal =
+                    (tarefa + 1)
+                            * matriz.length
+                            / quantidadeTarefas;
+
+            scope.fork(() -> {
+
+                double resultadoParcial =
+                        processarFaixa(
+                                matriz,
+                                linhaInicial,
+                                linhaFinal);
+
+                resultados.add(
+                        resultadoParcial);
+
+                return null;
+            });
+        }
+
+        scope.join();
+    }
+
+    return resultados
+            .stream()
+            .mapToDouble(
+                    Double::doubleValue)
+            .sum();
+}
+
+
+/*
+ * ============================================================
+ * MEDIÇÃO DOS EXPERIMENTOS
+ * ============================================================
+ *
+ * Cada implementação é executada dez vezes.
+ *
+ * Retorno:
+ *
+ * [0] = resultado do processamento
+ * [1] = tempo médio em milissegundos
+ */
+private static double[] medir(
+        Callable<Double> processamento)
+        throws Exception {
+
+    double resultado = 0.0;
+
+    double tempoTotal = 0.0;
+
+    for (int i = 0;
+         i < REPETICOES;
+         i++) {
+
+        long inicio =
+                System.nanoTime();
+
+        resultado =
+                processamento.call();
+
+        long fim =
+                System.nanoTime();
+
+        tempoTotal +=
+                (fim - inicio)
+                        / 1_000_000.0;
+    }
+
+    double tempoMedio =
+            tempoTotal
+                    / REPETICOES;
+
+    return new double[]{
+            resultado,
+            tempoMedio
+    };
+}
+
+
+/*
  * Os resultados paralelos podem apresentar diferenças
  * muito pequenas devido à ordem das somas com double.
+ *
+ * Por isso utilizamos uma pequena tolerância.
  */
 private static boolean resultadosEquivalentes(
         double esperado,
@@ -227,14 +430,45 @@ private static boolean resultadosEquivalentes(
 
 
 /*
+ * Exibe uma linha da tabela final.
+ */
+private static void exibirResultado(
+        String nome,
+        double[] medicao,
+        double tempoSequencial,
+        double resultadoSequencial) {
+
+    double speedup =
+            tempoSequencial
+                    / medicao[1];
+
+    String correto =
+            resultadosEquivalentes(
+                    resultadoSequencial,
+                    medicao[0])
+                    ? "SIM"
+                    : "NÃO";
+
+    System.out.printf(
+            "%-28s %15.3f %12.3f %12s%n",
+            nome,
+            medicao[1],
+            speedup,
+            correto);
+}
+
+
+/*
  * ============================================================
- * EXECUÇÃO DA PARTE 1
+ * EXECUÇÃO DO EXPERIMENTO
  * ============================================================
  *
  * Compara:
  *
  * V1 - Sequencial
  * V2 - Paralelismo não estruturado
+ * V3 - Paralelismo estruturado
+ * V4 - Estado compartilhado
  */
 private static void executarProcessamento(
         int linhas,
@@ -244,11 +478,11 @@ private static void executarProcessamento(
 
     System.out.println();
     System.out.println(
-            "==========================================");
+            "==============================================");
     System.out.println(
-            "       PROCESSAMENTO DA MATRIZ");
+            "              EXPERIMENTO");
     System.out.println(
-            "==========================================");
+            "==============================================");
 
     System.out.println(
             "Matriz: "
@@ -257,110 +491,120 @@ private static void executarProcessamento(
                     + colunas);
 
     System.out.println(
-            "Quantidade de tarefas: "
+            "Tarefas: "
                     + quantidadeTarefas);
 
+    System.out.println(
+            "Repetições: "
+                    + REPETICOES);
+
     long quantidadeElementos =
-            (long) linhas * colunas;
+            (long) linhas
+                    * colunas;
 
     System.out.println(
             "Elementos: "
                     + quantidadeElementos);
 
+    System.out.println();
     System.out.println(
             "Gerando matriz...");
 
+    /*
+     * A geração da matriz ocorre antes
+     * da medição.
+     */
     double[][] matriz =
             gerarMatriz(
                     linhas,
                     colunas);
 
     System.out.println(
-            "Matriz criada.");
+            "Executando V1...");
 
-    /*
-     * ========================================================
-     * V1 - SEQUENCIAL
-     * ========================================================
-     */
+    double[] sequencial =
+            medir(() ->
+                    processar(matriz));
 
-    long inicioSequencial =
-            System.nanoTime();
+    System.out.println(
+            "Executando V2...");
 
-    double resultadoSequencial =
-            processar(matriz);
+    double[] naoEstruturado =
+            medir(() ->
+                    processarNaoEstruturado(
+                            matriz,
+                            quantidadeTarefas));
 
-    long fimSequencial =
-            System.nanoTime();
+    System.out.println(
+            "Executando V3...");
 
-    double tempoSequencial =
-            (fimSequencial
-                    - inicioSequencial)
-                    / 1_000_000.0;
+    double[] estruturado =
+            medir(() ->
+                    processarEstruturado(
+                            matriz,
+                            quantidadeTarefas));
 
+    System.out.println(
+            "Executando V4...");
 
-    /*
-     * ========================================================
-     * V2 - NÃO ESTRUTURADO
-     * ========================================================
-     */
-
-    long inicioParalelo =
-            System.nanoTime();
-
-    double resultadoParalelo =
-            processarNaoEstruturado(
-                    matriz,
-                    quantidadeTarefas);
-
-    long fimParalelo =
-            System.nanoTime();
-
-    double tempoParalelo =
-            (fimParalelo
-                    - inicioParalelo)
-                    / 1_000_000.0;
-
-
-    double speedup =
-            tempoSequencial
-                    / tempoParalelo;
+    double[] compartilhado =
+            medir(() ->
+                    processarEstadoCompartilhado(
+                            matriz,
+                            quantidadeTarefas));
 
 
     System.out.println();
     System.out.println(
-            "------------------------------------------");
+            "==============================================================");
 
     System.out.printf(
-            "V1 - Sequencial: %.3f ms%n",
-            tempoSequencial);
-
-    System.out.printf(
-            "V2 - Não estruturado: %.3f ms%n",
-            tempoParalelo);
-
-    System.out.printf(
-            "Speedup: %.3f%n",
-            speedup);
+            "%-28s %15s %12s %12s%n",
+            "Implementação",
+            "Tempo médio",
+            "Speedup",
+            "Correto");
 
     System.out.println(
-            "Resultado correto: "
-                    + (resultadosEquivalentes(
-                    resultadoSequencial,
-                    resultadoParalelo)
-                    ? "SIM"
-                    : "NÃO"));
+            "--------------------------------------------------------------");
+
+
+    /*
+     * Sequencial.
+     *
+     * Speedup = 1 porque é o baseline.
+     */
+    System.out.printf(
+            "%-28s %15.3f %12s %12s%n",
+            "V1 - Sequencial",
+            sequencial[1],
+            "-",
+            "SIM");
+
+
+    exibirResultado(
+            "V2 - Não estruturado",
+            naoEstruturado,
+            sequencial[1],
+            sequencial[0]);
+
+
+    exibirResultado(
+            "V3 - Estruturado",
+            estruturado,
+            sequencial[1],
+            sequencial[0]);
+
+
+    exibirResultado(
+            "V4 - Estado compartilhado",
+            compartilhado,
+            sequencial[1],
+            sequencial[0]);
+
 
     System.out.println(
-            "------------------------------------------");
-
-    System.out.printf(
-            "Resultado sequencial: %.6f%n",
-            resultadoSequencial);
-
-    System.out.printf(
-            "Resultado paralelo:   %.6f%n",
-            resultadoParalelo);
+            "==============================================================");
 
     System.out.println();
 }
@@ -376,6 +620,7 @@ private static int lerQuantidadeTarefas(
     while (true) {
 
         System.out.println();
+
         System.out.print(
                 "Quantidade de tarefas "
                         + "(5, 10 ou 100): ");
@@ -407,8 +652,10 @@ private static void exibirMenu() {
     System.out.println();
     System.out.println(
             "==========================================");
+
     System.out.println(
             "      PROJETO DE COMPUTAÇÃO PARALELA");
+
     System.out.println(
             "==========================================");
 
