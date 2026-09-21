@@ -1,279 +1,527 @@
-# Projeto AV1 - Programação Paralela, Concorrente e Distribuída
-
-Projeto desenvolvido para a avaliação da disciplina de
-**Programação Paralela, Concorrente e Distribuída**.
+# Projeto AV1 — Programação Paralela, Concorrente e Distribuída
 
 ## Integrantes
 
 - Mateus José Galvão de Melo Guimarães
 - Gustavo José Magina Eustachio
 
-## Objetivo
-
-Comparar diferentes estratégias de processamento de uma matriz
-computacionalmente custosa, evoluindo de uma solução sequencial
-para soluções concorrentes e paralelas.
-
-O projeto parte da implementação sequencial fornecida pelo professor e demonstra a evolução do processamento de uma matriz utilizando diferentes estratégias de concorrência e paralelismo.
-
-O mesmo problema é resolvido através de quatro versões:
-
-1. V1 - Processamento Sequencial
-2. V2 - Paralelismo Não Estruturado
-3. V3 - Paralelismo Estruturado
-4. V4 - Estado Compartilhado
+**Professor:** Rafael Nunes de Lima  
+**Disciplina:** Programação Paralela, Concorrente e Distribuída  
+**Curso:** Sistemas de Informação — 5º período
 
 ---
 
-## V1 - Processamento Sequencial
+## 1. Objetivo
 
-A implementação sequencial fornecida pelo professor é utilizada como baseline.
+Este projeto tem como objetivo comparar diferentes formas de processamento de uma operação computacionalmente custosa aplicada aos elementos de uma matriz.
 
-A matriz é percorrida elemento por elemento e cada valor é submetido à função `calcular()`.
+A partir da implementação sequencial fornecida pelo professor, foram desenvolvidas quatro versões:
+
+- **V1 — Processamento sequencial**
+- **V2 — Paralelismo não estruturado**
+- **V3 — Paralelismo estruturado**
+- **V4 — Paralelismo estruturado com estado compartilhado**
+
+Os experimentos permitem comparar:
+
+- tempo médio de execução;
+- speedup;
+- efeito da quantidade de tarefas;
+- gerenciamento das tarefas;
+- sincronização;
+- estado compartilhado;
+- correção dos resultados.
 
 ---
 
-## V2 - Paralelismo Não Estruturado
+## 2. Estrutura do projeto
 
-A matriz é dividida em N partes.
+```text
+Projeto_AV1/
+│
+├── README.md
+├── USO_IA.md
+├── resultados-testes.txt
+│
+└── src/
+    └── Main.java
+```
 
-Cada tarefa fica responsável por um intervalo de linhas.
+O arquivo `resultados-testes.txt` contém o registro bruto das execuções realizadas durante os experimentos.
 
-São utilizados:
+---
+
+## 3. Problema computacional
+
+Cada elemento da matriz é submetido a uma operação matematicamente custosa.
+
+O cálculo realiza 1000 iterações utilizando funções trigonométricas e raiz quadrada:
+
+```java
+private static double calcular(double valor) {
+
+    double resultado = valor;
+
+    for (int i = 0; i < 1000; i++) {
+
+        resultado +=
+                Math.sin(valor + i)
+                        * Math.cos(valor - i)
+                        * Math.sqrt(Math.abs(valor) + 1);
+    }
+
+    return resultado;
+}
+```
+
+O elevado custo computacional permite observar com maior clareza as diferenças entre processamento sequencial e paralelo.
+
+---
+
+# 4. Implementações
+
+## V1 — Sequencial
+
+A primeira versão corresponde ao processamento sequencial e funciona como **baseline** para os demais experimentos.
+
+Todos os elementos da matriz são processados em sequência por uma única linha de execução.
+
+```text
+Matriz
+  ↓
+Processamento sequencial
+  ↓
+Resultado
+```
+
+O tempo médio da V1 é utilizado como referência para o cálculo do speedup.
+
+---
+
+## V2 — Paralelismo não estruturado
+
+Na segunda versão, a matriz é dividida em diferentes tarefas.
+
+Foram utilizados:
 
 - `ExecutorService`
-- pool de threads
 - `Future`
 - `Semaphore`
 
-O `Semaphore` funciona como uma porta de largada: as tarefas são criadas e posteriormente liberadas para execução.
+O `ExecutorService` gerencia a execução das tarefas.
+
+Cada `Future` representa o resultado parcial produzido por uma tarefa.
+
+O `Semaphore` funciona como uma porta de largada, permitindo que as tarefas sejam criadas antes da liberação do processamento.
+
+```text
+                    Matriz
+                      ↓
+              Divisão em tarefas
+                      ↓
+              ExecutorService
+          ┌───────────┼───────────┐
+          ↓           ↓           ↓
+       Tarefa 1    Tarefa 2    Tarefa N
+          ↓           ↓           ↓
+        Future      Future      Future
+          └───────────┼───────────┘
+                      ↓
+                   Resultado
+```
 
 ---
 
-## V3 - Paralelismo Estruturado
+## V3 — Paralelismo estruturado
 
-A mesma divisão da matriz é realizada utilizando:
+A terceira versão utiliza a API:
 
-- `StructuredTaskScope`
-- `fork()`
-- `join()`
-- `Subtask`
+```java
+StructuredTaskScope
+```
 
-As subtarefas pertencem ao mesmo escopo e a thread principal aguarda sua conclusão utilizando `join()`.
+Cada parte da matriz é criada como uma subtarefa através de:
+
+```java
+scope.fork(...)
+```
+
+Após a criação das subtarefas, o método:
+
+```java
+scope.join();
+```
+
+aguarda a conclusão das tarefas pertencentes ao escopo.
+
+```text
+              Método principal
+                     ↓
+             StructuredTaskScope
+          ┌──────────┼──────────┐
+          ↓          ↓          ↓
+      Subtarefa 1 Subtarefa 2 Subtarefa N
+          └──────────┼──────────┘
+                     ↓
+                   join()
+                     ↓
+                  Resultado
+```
+
+A principal diferença em relação à V2 é que as tarefas passam a pertencer explicitamente ao mesmo escopo de execução.
 
 ---
 
-## V4 - Estado Compartilhado
+## V4 — Estado compartilhado
 
 A quarta versão parte da implementação estruturada e adiciona um estado compartilhado.
 
-É utilizada:
+Foi utilizada a coleção concorrente:
 
 ```java
 ConcurrentLinkedQueue<Double>
 ```
 
-Cada subtarefa adiciona seu resultado parcial à mesma coleção concorrente.
+Cada subtarefa calcula seu resultado parcial e o adiciona à coleção:
 
-Após a conclusão das subtarefas, os resultados são somados pela aplicação principal.
+```java
+resultados.add(resultadoParcial);
+```
+
+Após a conclusão das subtarefas, os resultados são combinados:
+
+```java
+return resultados
+        .stream()
+        .mapToDouble(Double::doubleValue)
+        .sum();
+```
+
+A estrutura utilizada é:
+
+```text
+                  Matriz
+                    ↓
+            StructuredTaskScope
+         ┌──────────┼──────────┐
+         ↓          ↓          ↓
+       Tarefa 1   Tarefa 2   Tarefa N
+         │          │          │
+         └──────────┼──────────┘
+                    ↓
+       ConcurrentLinkedQueue
+                    ↓
+                 Resultado
+```
+
+A utilização de `ConcurrentLinkedQueue` permite que diferentes tarefas atualizem a coleção concorrente sem a necessidade de uma estrutura de bloqueio manual.
 
 ---
 
-# Arquitetura
+# 5. Execução do projeto
 
-```mermaid
-flowchart TD
+O projeto utiliza **Java 25**.
 
-    A[Matriz] --> B[V1 - Sequencial]
+Como `StructuredTaskScope` utiliza recurso preview, a execução deve habilitar essa funcionalidade.
 
-    A --> C[V2 - Não Estruturado]
-    C --> D[ExecutorService]
-    D --> E[Tarefas]
-    E --> F[Future]
-    F --> R[Resultado]
+No PowerShell:
 
-    A --> G[V3 - Estruturado]
-    G --> H[StructuredTaskScope]
-    H --> I[fork]
-    I --> J[join]
-    J --> R
-
-    A --> K[V4 - Estado Compartilhado]
-    K --> L[StructuredTaskScope]
-    L --> M[ConcurrentLinkedQueue]
-    M --> R
-
-    B --> R
+```powershell
+java --enable-preview --source 25 .\src\Main.java
 ```
 
 ---
 
-# Experimentos
+# 6. Metodologia dos experimentos
 
-O projeto utiliza os seguintes tamanhos de matriz:
+Foram utilizadas quatro dimensões de matriz:
 
-- 500 x 500
-- 1000 x 1000
-- 1500 x 1500
-- 2000 x 2000
+- 500 × 500
+- 1000 × 1000
+- 1500 × 1500
+- 2000 × 2000
 
-As versões paralelas podem ser executadas com:
+Para as versões paralelas foram utilizadas:
 
 - 5 tarefas
 - 10 tarefas
 - 100 tarefas
 
-Cada implementação é executada **10 vezes**.
+Cada configuração foi executada **10 vezes**.
 
-O programa apresenta o tempo médio das dez execuções.
+Para cada conjunto de execuções foi calculado o tempo médio.
 
----
-
-# Speedup
-
-O speedup é calculado através da fórmula:
+O speedup foi calculado por:
 
 ```text
-Speedup = Tempo médio sequencial / Tempo médio paralelo
+Speedup = Tempo sequencial / Tempo paralelo
 ```
 
-Valores maiores que `1` indicam que a versão paralela foi mais rápida que o baseline sequencial.
+A versão sequencial foi executada dez vezes para cada tamanho de matriz e utilizada como baseline.
+
+O tempo total necessário para a bateria completa de experimentos foi:
+
+**44,35 minutos.**
 
 ---
 
-# Validação do resultado
+# 7. Resultados dos Experimentos
 
-Todas as versões utilizam exatamente a mesma matriz.
+Cada configuração foi executada 10 vezes e o valor apresentado corresponde ao tempo médio das execuções.
 
-O resultado das versões paralelas é comparado ao resultado da versão sequencial.
+## Matriz 500 × 500
 
-Como a ordem das operações de soma com `double` pode variar em processamento paralelo, a comparação utiliza uma pequena tolerância numérica.
+| Implementação | Tarefas | Tempo médio (ms) | Speedup | Correto |
+|---|---:|---:|---:|:---:|
+| V1 - Sequencial | 1 | 3494.270 | - | SIM |
+| V2 - Não estruturado | 5 | 903.719 | 3.867 | SIM |
+| V3 - Estruturado | 5 | 805.347 | 4.339 | SIM |
+| V4 - Estado compartilhado | 5 | 786.851 | 4.441 | SIM |
+| V2 - Não estruturado | 10 | 569.907 | 6.131 | SIM |
+| V3 - Estruturado | 10 | 539.156 | 6.481 | SIM |
+| V4 - Estado compartilhado | 10 | 533.430 | 6.551 | SIM |
+| V2 - Não estruturado | 100 | 438.412 | 7.970 | SIM |
+| V3 - Estruturado | 100 | 438.626 | 7.966 | SIM |
+| V4 - Estado compartilhado | 100 | 438.347 | 7.971 | SIM |
 
----
+### Melhor configuração
 
-# Deadlock
-
-A implementação não utiliza múltiplos locks adquiridos em diferentes ordens.
-
-Na V2, cada tarefa realiza somente um `acquire()` no `Semaphore`.
-
-A thread principal libera um permit para cada tarefa antes de aguardar seus resultados.
-
-Dessa maneira, não existe dependência circular entre recursos.
-
-Na V3 e na V4, as subtarefas estão delimitadas pelo mesmo `StructuredTaskScope`.
-
----
-
-# Livelock
-
-Não existe mecanismo em que duas tarefas fiquem continuamente modificando seu comportamento em resposta uma à outra.
-
-Também não são utilizados ciclos de tentativa e liberação de locks.
+- V2: **100 tarefas — 438.412 ms**
+- V3: **100 tarefas — 438.626 ms**
+- V4: **100 tarefas — 438.347 ms**
 
 ---
 
-# Starvation
+## Matriz 1000 × 1000
 
-Na V2 o `Semaphore` é criado utilizando política justa:
+| Implementação | Tarefas | Tempo médio (ms) | Speedup | Correto |
+|---|---:|---:|---:|:---:|
+| V1 - Sequencial | 1 | 14051.873 | - | SIM |
+| V2 - Não estruturado | 5 | 3754.800 | 3.742 | SIM |
+| V3 - Estruturado | 5 | 3201.882 | 4.389 | SIM |
+| V4 - Estado compartilhado | 5 | 3125.928 | 4.495 | SIM |
+| V2 - Não estruturado | 10 | 2163.266 | 6.496 | SIM |
+| V3 - Estruturado | 10 | 2059.277 | 6.824 | SIM |
+| V4 - Estado compartilhado | 10 | 2100.176 | 6.691 | SIM |
+| V2 - Não estruturado | 100 | 1753.959 | 8.012 | SIM |
+| V3 - Estruturado | 100 | 1754.508 | 8.009 | SIM |
+| V4 - Estado compartilhado | 100 | 1750.761 | 8.026 | SIM |
+
+### Melhor configuração
+
+- V2: **100 tarefas — 1753.959 ms**
+- V3: **100 tarefas — 1754.508 ms**
+- V4: **100 tarefas — 1750.761 ms**
+
+---
+
+## Matriz 1500 × 1500
+
+| Implementação | Tarefas | Tempo médio (ms) | Speedup | Correto |
+|---|---:|---:|---:|:---:|
+| V1 - Sequencial | 1 | 31493.399 | - | SIM |
+| V2 - Não estruturado | 5 | 8151.439 | 3.864 | SIM |
+| V3 - Estruturado | 5 | 7162.746 | 4.397 | SIM |
+| V4 - Estado compartilhado | 5 | 7075.497 | 4.451 | SIM |
+| V2 - Não estruturado | 10 | 4782.449 | 6.585 | SIM |
+| V3 - Estruturado | 10 | 4612.125 | 6.828 | SIM |
+| V4 - Estado compartilhado | 10 | 4510.464 | 6.982 | SIM |
+| V2 - Não estruturado | 100 | 3953.970 | 7.965 | SIM |
+| V3 - Estruturado | 100 | 3952.566 | 7.968 | SIM |
+| V4 - Estado compartilhado | 100 | 3958.554 | 7.956 | SIM |
+
+### Melhor configuração
+
+- V2: **100 tarefas — 3953.970 ms**
+- V3: **100 tarefas — 3952.566 ms**
+- V4: **100 tarefas — 3958.554 ms**
+
+---
+
+## Matriz 2000 × 2000
+
+| Implementação | Tarefas | Tempo médio (ms) | Speedup | Correto |
+|---|---:|---:|---:|:---:|
+| V1 - Sequencial | 1 | 56030.365 | - | SIM |
+| V2 - Não estruturado | 5 | 14264.509 | 3.928 | SIM |
+| V3 - Estruturado | 5 | 13096.662 | 4.278 | SIM |
+| V4 - Estado compartilhado | 5 | 12917.985 | 4.337 | SIM |
+| V2 - Não estruturado | 10 | 8304.731 | 6.747 | SIM |
+| V3 - Estruturado | 10 | 8043.425 | 6.966 | SIM |
+| V4 - Estado compartilhado | 10 | 7941.499 | 7.055 | SIM |
+| V2 - Não estruturado | 100 | 7087.692 | 7.905 | SIM |
+| V3 - Estruturado | 100 | 7041.512 | 7.957 | SIM |
+| V4 - Estado compartilhado | 100 | 7023.127 | 7.978 | SIM |
+
+### Melhor configuração
+
+- V2: **100 tarefas — 7087.692 ms**
+- V3: **100 tarefas — 7041.512 ms**
+- V4: **100 tarefas — 7023.127 ms**
+
+---
+
+# 8. Análise dos resultados
+
+Os experimentos demonstraram uma diferença significativa entre o processamento sequencial e as versões paralelas.
+
+A versão sequencial apresentou crescimento aproximadamente proporcional à quantidade de elementos processados.
+
+Na matriz 500 × 500, o tempo médio sequencial foi:
+
+```text
+3494.270 ms
+```
+
+Na matriz 2000 × 2000, esse tempo aumentou para:
+
+```text
+56030.365 ms
+```
+
+As versões paralelas reduziram consideravelmente o tempo de processamento.
+
+---
+
+## Efeito da quantidade de tarefas
+
+A utilização de **5 tarefas** produziu speedups aproximadamente entre 3,7 e 4,5.
+
+Com **10 tarefas**, os speedups aumentaram para aproximadamente 6,1 a 7,1.
+
+Com **100 tarefas**, os resultados ficaram próximos de um speedup de 8.
+
+Nos experimentos realizados, **100 tarefas apresentou o menor tempo médio em V2, V3 e V4 para todos os tamanhos de matriz avaliados**.
+
+---
+
+## Comparação entre V2, V3 e V4
+
+Com apenas 5 tarefas, as versões estruturadas V3 e V4 apresentaram vantagem em relação à V2 na maior parte dos testes.
+
+Com o aumento da quantidade de tarefas, as diferenças entre as três implementações diminuíram.
+
+Com 100 tarefas, V2, V3 e V4 apresentaram tempos bastante próximos.
+
+Isso mostra que, nesse ambiente de execução, o ganho de desempenho passa a se estabilizar quando o número de tarefas é aumentado.
+
+---
+
+## Maior speedup observado
+
+O maior speedup obtido durante os experimentos foi:
+
+```text
+8.026
+```
+
+Esse resultado ocorreu com:
+
+```text
+Matriz: 1000 × 1000
+Implementação: V4 - Estado compartilhado
+Tarefas: 100
+Tempo médio: 1750.761 ms
+```
+
+---
+
+## Correção dos resultados
+
+Todas as configurações apresentaram:
+
+```text
+Correto = SIM
+```
+
+Isso significa que as versões paralelas produziram resultados equivalentes ao baseline sequencial, considerando a tolerância utilizada para operações com valores do tipo `double`.
+
+---
+
+# 9. Deadlock
+
+Não foi identificado cenário de deadlock nas implementações.
+
+Na V2 existe apenas um `Semaphore` utilizado como mecanismo de liberação inicial das tarefas.
+
+As tarefas:
+
+1. aguardam uma permissão;
+2. recebem a permissão;
+3. executam seu processamento;
+4. terminam.
+
+Não existem múltiplos recursos sendo adquiridos em ordens diferentes e não existe espera circular entre tarefas.
+
+Nas versões V3 e V4, o ciclo de vida das subtarefas é controlado pelo `StructuredTaskScope`.
+
+---
+
+# 10. Livelock
+
+Não existem mecanismos de repetição nos quais duas ou mais tarefas alterem continuamente seu comportamento em resposta umas às outras.
+
+As tarefas recebem uma faixa definida da matriz, executam o cálculo e encerram.
+
+Dessa forma, não existe situação de livelock no fluxo implementado.
+
+---
+
+# 11. Starvation
+
+Na V2 foi utilizado:
 
 ```java
-new Semaphore(0, true)
+new Semaphore(0, true);
 ```
 
-Além disso, existe um permit para cada tarefa.
+O parâmetro `true` habilita uma política justa de concessão das permissões entre as threads que aguardam no semáforo.
 
-Todas as tarefas executam uma quantidade finita de processamento.
+Além disso:
 
-Na V4 é utilizada uma `ConcurrentLinkedQueue`, evitando a necessidade de gerenciamento manual de um lock para atualização da coleção compartilhada.
+- todas as tarefas recebem quantidade finita de trabalho;
+- todas as permissões necessárias são liberadas;
+- não existem tarefas de prioridade diferente;
+- cada tarefa termina após processar sua parte da matriz.
+
+Nas versões estruturadas, todas as subtarefas pertencem ao mesmo `StructuredTaskScope` e são aguardadas através do `join()`.
+
+Assim, o fluxo implementado não apresenta uma condição estrutural que mantenha permanentemente uma tarefa sem possibilidade de progresso.
 
 ---
 
-# Como executar
+# 12. Conclusão
 
-## Requisitos
+Os resultados demonstraram claramente o benefício do paralelismo para o problema proposto.
 
-- Java JDK 25
-- IntelliJ IDEA ou terminal
-- Preview Features habilitadas para `StructuredTaskScope`
+A implementação sequencial apresentou os maiores tempos de execução em todos os tamanhos avaliados.
 
-Pelo terminal:
+A divisão do processamento em tarefas permitiu reduzir significativamente o tempo necessário para processar as matrizes.
 
-```bash
-java --enable-preview --source 25 src/Main.java
-```
+Os experimentos também mostraram que aumentar a quantidade de tarefas de 5 para 10 e posteriormente para 100 aumentou o desempenho no ambiente utilizado.
 
-O programa solicitará primeiro o tamanho da matriz:
+A configuração com 100 tarefas apresentou os melhores tempos médios para todas as versões paralelas.
 
-```text
-1 - Matriz 500 x 500
-2 - Matriz 1000 x 1000
-3 - Matriz 1500 x 1500
-4 - Matriz 2000 x 2000
-0 - Sair
-```
+Entretanto, V2, V3 e V4 apresentam diferenças conceituais importantes.
 
-Em seguida:
+A V2 exige gerenciamento explícito do executor, dos resultados e da sincronização.
 
-```text
-Quantidade de tarefas (5, 10 ou 100):
-```
+A V3 organiza as subtarefas dentro de um escopo estruturado, tornando a relação entre criação, execução e término das tarefas mais explícita.
 
-O programa executará as quatro versões 10 vezes e apresentará:
+A V4 acrescenta estado compartilhado utilizando uma coleção concorrente, demonstrando como múltiplas tarefas podem registrar seus resultados de maneira segura.
 
-- tempo médio;
-- speedup;
-- validação do resultado.
+Assim, o projeto permitiu observar não apenas ganhos de desempenho, mas também diferentes estratégias de organização e sincronização do processamento concorrente.
 
 ---
 
-## Resultados dos Experimentos
+# 13. Registro completo dos experimentos
 
-Cada configuração foi executada 10 vezes e o valor apresentado
-corresponde ao tempo médio das execuções.
+As dez execuções realizadas para cada configuração estão disponíveis no arquivo:
 
-| Matriz | Implementação | Tarefas | Tempo médio (ms) | Speedup | Correto |
-|---|---|---:|---:|---:|---|
-| 500x500 | V1 - Sequencial | 1 | 3494.270 | - | SIM |
-| 500x500 | V2 - Não estruturado | 5 | 903.719 | 3.867 | SIM |
-| 500x500 | V3 - Estruturado | 5 | 805.347 | 4.339 | SIM |
-| 500x500 | V4 - Estado compartilhado | 5 | 786.851 | 4.441 | SIM |
-| 500x500 | V2 - Não estruturado | 10 | 569.907 | 6.131 | SIM |
-| 500x500 | V3 - Estruturado | 10 | 539.156 | 6.481 | SIM |
-| 500x500 | V4 - Estado compartilhado | 10 | 533.430 | 6.551 | SIM |
-| 500x500 | V2 - Não estruturado | 100 | 438.412 | 7.970 | SIM |
-| 500x500 | V3 - Estruturado | 100 | 438.626 | 7.966 | SIM |
-| 500x500 | V4 - Estado compartilhado | 100 | 438.347 | 7.971 | SIM |
+```text
+resultados-testes.txt
+```
 
-| 1000x1000 | V1 - Sequencial | 1 | 14051.873 | - | SIM |
-| 1000x1000 | V2 - Não estruturado | 5 | 3754.800 | 3.742 | SIM |
-| 1000x1000 | V3 - Estruturado | 5 | 3201.882 | 4.389 | SIM |
-| 1000x1000 | V4 - Estado compartilhado | 5 | 3125.928 | 4.495 | SIM |
-| 1000x1000 | V2 - Não estruturado | 10 | 2163.266 | 6.496 | SIM |
-| 1000x1000 | V3 - Estruturado | 10 | 2059.277 | 6.824 | SIM |
-| 1000x1000 | V4 - Estado compartilhado | 10 | 2100.176 | 6.691 | SIM |
-| 1000x1000 | V2 - Não estruturado | 100 | 1753.959 | 8.012 | SIM |
-| 1000x1000 | V3 - Estruturado | 100 | 1754.508 | 8.009 | SIM |
-| 1000x1000 | V4 - Estado compartilhado | 100 | 1750.761 | 8.026 | SIM |
+O arquivo foi mantido no repositório para permitir a consulta aos tempos individuais utilizados no cálculo das médias.
 
-| 1500x1500 | V1 - Sequencial | 1 | 31493.399 | - | SIM |
-| 1500x1500 | V2 - Não estruturado | 5 | 8151.439 | 3.864 | SIM |
-| 1500x1500 | V3 - Estruturado | 5 | 7162.746 | 4.397 | SIM |
-| 1500x1500 | V4 - Estado compartilhado | 5 | 7075.497 | 4.451 | SIM |
-| 1500x1500 | V2 - Não estruturado | 10 | 4782.449 | 6.585 | SIM |
-| 1500x1500 | V3 - Estruturado | 10 | 4612.125 | 6.828 | SIM |
-| 1500x1500 | V4 - Estado compartilhado | 10 | 4510.464 | 6.982 | SIM |
-| 1500x1500 | V2 - Não estruturado | 100 | 3953.970 | 7.965 | SIM |
-| 1500x1500 | V3 - Estruturado | 100 | 3952.566 | 7.968 | SIM |
-| 1500x1500 | V4 - Estado compartilhado | 100 | 3958.554 | 7.956 | SIM |
-
-| 2000x2000 | V1 - Sequencial | 1 | 56030.365 | - | SIM |
-| 2000x2000 | V2 - Não estruturado | 5 | 14264.509 | 3.928 | SIM |
-| 2000x2000 | V3 - Estruturado | 5 | 13096.662 | 4.278 | SIM |
-| 2000x2000 | V4 - Estado compartilhado | 5 | 12917.985 | 4.337 | SIM |
-| 2000x2000 | V2 - Não estruturado | 10 | 8304.731 | 6.747 | SIM |
-| 2000x2000 | V3 - Estruturado | 10 | 8043.425 | 6.966 | SIM |
-| 2000x2000 | V4 - Estado compartilhado | 10 | 7941.499 | 7.055 | SIM |
-| 2000x2000 | V2 - Não estruturado | 100 | 7087.692 | 7.905 | SIM |
-| 2000x2000 | V3 - Estruturado | 100 | 7041.512 | 7.957 | SIM |
-| 2000x2000 | V4 - Estado compartilhado | 100 | 7023.127 | 7.978 | SIM |
+---
