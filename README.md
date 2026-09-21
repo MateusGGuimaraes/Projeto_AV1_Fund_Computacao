@@ -40,7 +40,6 @@ Os experimentos permitem comparar:
 Projeto_AV1/
 │
 ├── README.md
-├── USO_IA.md
 ├── resultados-testes.txt
 │
 └── src/
