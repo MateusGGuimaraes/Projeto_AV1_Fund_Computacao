@@ -227,19 +227,53 @@ O programa executará as quatro versões 10 vezes e apresentará:
 
 ---
 
-# Resultados Experimentais
+## Resultados dos Experimentos
 
-Os valores abaixo devem ser preenchidos com os resultados reais obtidos nos experimentos.
+Cada configuração foi executada 10 vezes e o valor apresentado
+corresponde ao tempo médio das execuções.
 
 | Matriz | Implementação | Tarefas | Tempo médio (ms) | Speedup | Correto |
 |---|---|---:|---:|---:|---|
-| 500x500 | Sequencial | 1 | 5348,428 | - | SIM |
-| 500x500 | Não estruturado | 5 | 1294,132 | 4,133 | SIM |
-| 500x500 | Estruturado | 5 | 1103,275 | 4,848 | SIM |
-| 500x500 | Estado compartilhado | 5 | 1078,283 | 4,960 | SIM |
+| 500x500 | V1 - Sequencial | 1 | 3494.270 | - | SIM |
+| 500x500 | V2 - Não estruturado | 5 | 903.719 | 3.867 | SIM |
+| 500x500 | V3 - Estruturado | 5 | 805.347 | 4.339 | SIM |
+| 500x500 | V4 - Estado compartilhado | 5 | 786.851 | 4.441 | SIM |
+| 500x500 | V2 - Não estruturado | 10 | 569.907 | 6.131 | SIM |
+| 500x500 | V3 - Estruturado | 10 | 539.156 | 6.481 | SIM |
+| 500x500 | V4 - Estado compartilhado | 10 | 533.430 | 6.551 | SIM |
+| 500x500 | V2 - Não estruturado | 100 | 438.412 | 7.970 | SIM |
+| 500x500 | V3 - Estruturado | 100 | 438.626 | 7.966 | SIM |
+| 500x500 | V4 - Estado compartilhado | 100 | 438.347 | 7.971 | SIM |
 
-Valores obtidos com JDK 25 (Temurin), média de 10 execuções para matriz 500 x 500 e 5 tarefas.
+| 1000x1000 | V1 - Sequencial | 1 | 14051.873 | - | SIM |
+| 1000x1000 | V2 - Não estruturado | 5 | 3754.800 | 3.742 | SIM |
+| 1000x1000 | V3 - Estruturado | 5 | 3201.882 | 4.389 | SIM |
+| 1000x1000 | V4 - Estado compartilhado | 5 | 3125.928 | 4.495 | SIM |
+| 1000x1000 | V2 - Não estruturado | 10 | 2163.266 | 6.496 | SIM |
+| 1000x1000 | V3 - Estruturado | 10 | 2059.277 | 6.824 | SIM |
+| 1000x1000 | V4 - Estado compartilhado | 10 | 2100.176 | 6.691 | SIM |
+| 1000x1000 | V2 - Não estruturado | 100 | 1753.959 | 8.012 | SIM |
+| 1000x1000 | V3 - Estruturado | 100 | 1754.508 | 8.009 | SIM |
+| 1000x1000 | V4 - Estado compartilhado | 100 | 1750.761 | 8.026 | SIM |
 
-A tabela deverá ser completada após a execução das demais configurações utilizadas pelo grupo.
+| 1500x1500 | V1 - Sequencial | 1 | 31493.399 | - | SIM |
+| 1500x1500 | V2 - Não estruturado | 5 | 8151.439 | 3.864 | SIM |
+| 1500x1500 | V3 - Estruturado | 5 | 7162.746 | 4.397 | SIM |
+| 1500x1500 | V4 - Estado compartilhado | 5 | 7075.497 | 4.451 | SIM |
+| 1500x1500 | V2 - Não estruturado | 10 | 4782.449 | 6.585 | SIM |
+| 1500x1500 | V3 - Estruturado | 10 | 4612.125 | 6.828 | SIM |
+| 1500x1500 | V4 - Estado compartilhado | 10 | 4510.464 | 6.982 | SIM |
+| 1500x1500 | V2 - Não estruturado | 100 | 3953.970 | 7.965 | SIM |
+| 1500x1500 | V3 - Estruturado | 100 | 3952.566 | 7.968 | SIM |
+| 1500x1500 | V4 - Estado compartilhado | 100 | 3958.554 | 7.956 | SIM |
 
----
+| 2000x2000 | V1 - Sequencial | 1 | 56030.365 | - | SIM |
+| 2000x2000 | V2 - Não estruturado | 5 | 14264.509 | 3.928 | SIM |
+| 2000x2000 | V3 - Estruturado | 5 | 13096.662 | 4.278 | SIM |
+| 2000x2000 | V4 - Estado compartilhado | 5 | 12917.985 | 4.337 | SIM |
+| 2000x2000 | V2 - Não estruturado | 10 | 8304.731 | 6.747 | SIM |
+| 2000x2000 | V3 - Estruturado | 10 | 8043.425 | 6.966 | SIM |
+| 2000x2000 | V4 - Estado compartilhado | 10 | 7941.499 | 7.055 | SIM |
+| 2000x2000 | V2 - Não estruturado | 100 | 7087.692 | 7.905 | SIM |
+| 2000x2000 | V3 - Estruturado | 100 | 7041.512 | 7.957 | SIM |
+| 2000x2000 | V4 - Estado compartilhado | 100 | 7023.127 | 7.978 | SIM |
